@@ -2834,12 +2834,28 @@ class ElementQuery extends Query implements ElementQueryInterface
         }
 
         if (!empty($this->generatedFields)) {
+            $generatedFieldsByHandle = [];
+
+            foreach ($this->generatedFields as $generatedField) {
+                $generatedFieldsByHandle[$generatedField['handle']][$generatedField['uid']][] = $generatedField;
+            }
+
             $qb = Craft::$app->getDb()->getQueryBuilder();
-            foreach ($this->generatedFields as $field) {
-                $handle = $field['handle'] ?? '';
-                if ($handle !== '' && isset($fieldAttributes->$handle) && !isset($fieldsByHandle[$handle])) {
-                    $column = $qb->jsonExtract('elements_sites.content', [$field['uid']]);
-                    $this->subQuery->andWhere(Db::parseParam($column, $fieldAttributes->$handle));
+            foreach (array_keys($generatedFieldsByHandle) as $handle) {
+                if($handle === '') continue;
+                if(!isset($fieldAttributes->$handle)) continue;
+                if(isset($fieldsByHandle[$handle])) continue;
+
+                $conditions = [];
+                foreach(array_keys($generatedFieldsByHandle[$handle]) as $uid) {
+                    $column = $qb->jsonExtract('elements_sites.content', [$uid]);
+                    $conditions[] = Db::parseParam($column, $fieldAttributes->$handle);
+                }
+                if(empty($conditions)) continue;
+                if(count($conditions) == 1) {
+                    $this->subQuery->andWhere($condition[0]);
+                } else {
+                    $this->subQuery->andWhere(['or', ...$conditions]);
                 }
             }
         }
